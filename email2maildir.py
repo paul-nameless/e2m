@@ -33,26 +33,31 @@ def get_tmp_filename():
 
 
 def notify(unseen):
-    logger.info('Notifying...')
     title, message = 'Gmail', f'Unread messages {unseen}'
     t = '-title {!r}'.format(title)
     m = '-message {!r}'.format(message)
-    os.system('/usr/local/bin/terminal-notifier {}'.format(' '.join([m, t])))
-    logger.info('Notified')
+    os.system(
+        '/usr/local/bin/terminal-notifier -sound default {}'.format(
+            ' '.join([m, t])
+        )
+    )
 
 
 def truncate(conf):
-    files = os.listdir(cur_dir)
+    files = [e for e in os.listdir(cur_dir) if conf['email'] in e]
     logger.debug('Before deleting: %s', len(files))
     files.sort(key=lambda fn: int(fn.replace(conf['email'], '').split(':')[0]))
     for fn in reversed(files[int(conf['keep']):]):
         logger.debug('Deleting: %s', fn)
         os.remove(os.path.join(cur_dir, fn))
-    logger.debug('After deleting: %s', len(os.listdir(cur_dir)))
+    logger.debug(
+        'After deleting: %s',
+        len([e for e in os.listdir(cur_dir) if conf['email'] in e])
+    )
 
 
-def sync(conf):
-    state_file = os.path.join(mail_dir, '.last-uid')
+def sync(conf, section):
+    state_file = os.path.join(mail_dir, f'.last-uid-{section}')
     last_saved_uid = None
     if os.path.isfile(state_file):
         with open(state_file) as f:
@@ -79,6 +84,7 @@ def sync(conf):
                 'No messages to retrieve: last_uid=%s, last_saved_uid=%s',
                 last_uid, last_saved_uid
             )
+            truncate(conf)
             return
         else:
             notify(last_uid-last_saved_uid)
@@ -86,7 +92,7 @@ def sync(conf):
     else:
         start_uid = last_uid - int(conf['keep'])
 
-    for uid in range(start_uid, last_uid):
+    for uid in range(start_uid, last_uid+1):
         _, mail_data = mail.fetch(str(uid).encode(), '(RFC822)')
         email = mail_data[0][1]
         tmp_path = os.path.join(tmp_dir, get_tmp_filename())
@@ -97,9 +103,9 @@ def sync(conf):
         os.rename(tmp_path, os.path.join(new_dir, filename))
         logger.debug('Synced: %s', filename)
 
-    with open(os.path.join(mail_dir, '.last-uid'), 'w') as f:
-        logger.debug('Saved last uid: %s', last_uid)
+    with open(state_file, 'w') as f:
         f.write(str(last_uid))
+        logger.debug('Saved last uid: %s', last_uid)
     truncate(conf)
 
 
@@ -145,7 +151,7 @@ def main():
         conf = configparser.ConfigParser()
         conf.read(os.path.join(home_dir, '.e2m-conf'))
         for section in conf.sections():
-            sync(conf[section])
+            sync(conf[section], section)
     finally:
         release()
 
