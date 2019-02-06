@@ -67,7 +67,7 @@ def sync(conf, section):
 
     mail = imaplib.IMAP4_SSL(conf['imap_host'], conf['imap_port'])
     mail.login(conf['email'], conf['pswd'])
-    rc, data = mail.select('inbox')
+    rc, data = mail.select('inbox', readonly=True)
     if rc != 'OK':
         logger.error('mail.select returned not ok response')
         return
@@ -102,6 +102,8 @@ def sync(conf, section):
         filename = f'{conf["email"]}-{uid}'
         os.rename(tmp_path, os.path.join(new_dir, filename))
         logger.debug('Synced: %s', filename)
+
+    mail.close()
 
     with open(state_file, 'w') as f:
         f.write(str(last_uid))
