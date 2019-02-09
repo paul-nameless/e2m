@@ -1,4 +1,5 @@
 import configparser
+import email
 import imaplib
 import logging
 import logging.handlers
@@ -31,10 +32,10 @@ def get_tmp_filename():
     return f'{time.time()}-{os.getpid()}-{uuid.uuid4().hex[:16]}'
 
 
-def notify(unseen):
-    subtitle = f'-subtitle Finished'
-    title = '-title {!r}'.format('Email sync')
-    msg = '-message {!r}'.format(f'{unseen} new messages')
+def notify(unseen, _from, subject):
+    subtitle = f'-subtitle {!r}'.format(_from)
+    title = '-title {!r}'.format(f'Synced {unseen} new emails')
+    msg = '-message {!r}'.format(subject)
     sound = '-sound default'
     os.system(
         f'/usr/local/bin/terminal-notifier {sound} {title} {subtitle} {msg}'
@@ -54,6 +55,41 @@ def truncate(conf):
     )
 
 
+def initial_sync(conf):
+    state_file = os.path.join(mail_dir, f'.last-uid-{conf["email"]}')
+    mail = imaplib.IMAP4_SSL(conf['imap_host'], conf['imap_port'])
+    mail.login(conf['email'], conf['pswd'])
+    rc, data = mail.select('inbox', readonly=True)
+
+    if rc != 'OK':
+        logger.error('mail.select returned not ok response')
+        return
+    last_uid_str = data[0].decode()
+
+    if not last_uid_str.isdigit():
+        logger.error('last returned uid not digit: %s', last_uid_str)
+        return
+    last_uid = int(last_uid_str)
+    start_uid = last_uid - int(conf['keep'])
+
+    for uid in range(start_uid, last_uid+1):
+        _, mail_data = mail.fetch(str(uid).encode(), '(RFC822)')
+        email = mail_data[0][1]
+        tmp_path = os.path.join(tmp_dir, get_tmp_filename())
+        with open(tmp_path, 'wb') as f:
+            f.write(email)
+
+        filename = f'{conf["email"]}-{uid}:2,S'
+        os.rename(tmp_path, os.path.join(cur_dir, filename))
+        logger.debug('Initial sync, marked as read: %s', filename)
+
+    with open(state_file, 'w') as f:
+        f.write(str(last_uid))
+        logger.debug('Saved last uid: %s', last_uid)
+
+    mail.close()
+
+
 def sync(conf):
     state_file = os.path.join(mail_dir, f'.last-uid-{conf["email"]}')
     last_saved_uid = None
@@ -62,6 +98,9 @@ def sync(conf):
             content = f.read()
             if content.isdigit():
                 last_saved_uid = int(content)
+    if last_saved_uid is None:
+        initial_sync(conf)
+        return
 
     mail = imaplib.IMAP4_SSL(conf['imap_host'], conf['imap_port'])
     mail.login(conf['email'], conf['pswd'])
@@ -76,39 +115,41 @@ def sync(conf):
         return
     last_uid = int(last_uid_str)
 
-    if last_saved_uid:
-        if last_uid <= last_saved_uid:
-            logger.info(
-                'No messages to retrieve: last_uid=%s, last_saved_uid=%s',
-                last_uid, last_saved_uid
-            )
-            truncate(conf)
-            return
-        else:
-            # new messages
-            notify(last_uid-last_saved_uid)
-            start_uid = last_saved_uid
+    if last_uid <= last_saved_uid:
+        logger.info(
+            'No messages to retrieve: last_uid=%s, last_saved_uid=%s',
+            last_uid, last_saved_uid
+        )
+        truncate(conf)
+        return
     else:
-        # first scan
-        start_uid = last_uid - int(conf['keep'])
+        start_uid = last_saved_uid
 
+    last_email = None
     for uid in range(start_uid, last_uid+1):
         _, mail_data = mail.fetch(str(uid).encode(), '(RFC822)')
-        email = mail_data[0][1]
+        _email = mail_data[0][1]
         tmp_path = os.path.join(tmp_dir, get_tmp_filename())
         with open(tmp_path, 'wb') as f:
-            f.write(email)
+            f.write(_email)
+        last_email = email.message_from_bytes(_email)
 
         filename = f'{conf["email"]}-{uid}'
         os.rename(tmp_path, os.path.join(new_dir, filename))
         logger.debug('Synced: %s', filename)
 
-    mail.close()
+    if last_email:
+        notify(
+            last_uid-last_saved_uid,
+            last_email['from'],
+            last_email['subject']
+        )
 
     with open(state_file, 'w') as f:
         f.write(str(last_uid))
         logger.debug('Saved last uid: %s', last_uid)
     truncate(conf)
+    mail.close()
 
 
 lock_file = os.path.join('/tmp', 'eamil2maildir.pid')
