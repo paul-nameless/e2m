@@ -3,11 +3,11 @@ import imaplib
 import logging
 import logging.handlers
 import os
-import socket
 import time
+import uuid
 
 home_dir = os.path.expanduser("~")
-mail_dir = os.path.join(home_dir, 'mail')
+mail_dir = os.path.join(home_dir, 'Documents/mail')
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -22,24 +22,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-hostname = socket.gethostname()
 tmp_dir = os.path.join(mail_dir, 'tmp')
 new_dir = os.path.join(mail_dir, 'new')
 cur_dir = os.path.join(mail_dir, 'cur')
 
 
 def get_tmp_filename():
-    return f'{time.time()}-{os.getpid()}-{hostname}'
+    return f'{time.time()}-{os.getpid()}-{uuid.uuid4().hex[:16]}'
 
 
 def notify(unseen):
-    title, message = 'Gmail', f'Unread messages {unseen}'
-    t = '-title {!r}'.format(title)
-    m = '-message {!r}'.format(message)
+    subtitle = f'-subtitle Finished'
+    title = '-title {!r}'.format('Email sync')
+    msg = '-message {!r}'.format(f'{unseen} new messages')
+    sound = '-sound default'
     os.system(
-        '/usr/local/bin/terminal-notifier -sound default {}'.format(
-            ' '.join([m, t])
-        )
+        f'/usr/local/bin/terminal-notifier {sound} {title} {subtitle} {msg}'
     )
 
 
@@ -56,8 +54,8 @@ def truncate(conf):
     )
 
 
-def sync(conf, section):
-    state_file = os.path.join(mail_dir, f'.last-uid-{section}')
+def sync(conf):
+    state_file = os.path.join(mail_dir, f'.last-uid-{conf["email"]}')
     last_saved_uid = None
     if os.path.isfile(state_file):
         with open(state_file) as f:
@@ -87,9 +85,11 @@ def sync(conf, section):
             truncate(conf)
             return
         else:
+            # new messages
             notify(last_uid-last_saved_uid)
             start_uid = last_saved_uid
     else:
+        # first scan
         start_uid = last_uid - int(conf['keep'])
 
     for uid in range(start_uid, last_uid+1):
@@ -153,7 +153,7 @@ def main():
         conf = configparser.ConfigParser()
         conf.read(os.path.join(home_dir, '.e2m-conf'))
         for section in conf.sections():
-            sync(conf[section], section)
+            sync(conf[section])
     finally:
         release()
 
