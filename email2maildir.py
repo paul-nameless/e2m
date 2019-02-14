@@ -38,12 +38,15 @@ def get_tmp_filename():
 
 
 def notify(unseen, _from, subject):
+    msg = '-message {!r}'.format(subject)
     subtitle = '-subtitle {!r}'.format(_from)
     title = '-title {!r}'.format(f'Synced {unseen} new emails')
-    msg = '-message {!r}'.format(subject)
     sound = '-sound default'
+    icon = '-appIcon e2m.png'
+    cmd = '/usr/local/bin/terminal-notifier'
+
     os.system(
-        f'/usr/local/bin/terminal-notifier {sound} {title} {subtitle} {msg}'
+        f'{cmd} {icon} {sound} {title} {subtitle} {msg}'
     )
 
 
