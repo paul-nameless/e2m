@@ -8,7 +8,11 @@ import time
 import uuid
 
 home_dir = os.path.expanduser("~")
-mail_dir = os.path.join(home_dir, 'Documents/mail')
+
+conf = configparser.ConfigParser()
+conf.read(os.path.join(home_dir, '.e2mrc'))
+
+mail_dir = conf['DEFAULT']['maildir']
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -26,6 +30,7 @@ logger = logging.getLogger(__name__)
 tmp_dir = os.path.join(mail_dir, 'tmp')
 new_dir = os.path.join(mail_dir, 'new')
 cur_dir = os.path.join(mail_dir, 'cur')
+lock_file = os.path.join('/tmp', 'eamil2maildir.pid')
 
 
 def get_tmp_filename():
@@ -33,7 +38,7 @@ def get_tmp_filename():
 
 
 def notify(unseen, _from, subject):
-    subtitle = f'-subtitle {!r}'.format(_from)
+    subtitle = '-subtitle {!r}'.format(_from)
     title = '-title {!r}'.format(f'Synced {unseen} new emails')
     msg = '-message {!r}'.format(subject)
     sound = '-sound default'
@@ -114,6 +119,7 @@ def sync(conf):
         logger.error('last returned uid not digit: %s', last_uid_str)
         return
     last_uid = int(last_uid_str)
+    logger.debug('Last uid: %s', last_uid)
 
     if last_uid <= last_saved_uid:
         logger.info(
@@ -126,7 +132,8 @@ def sync(conf):
         start_uid = last_saved_uid
 
     last_email = None
-    for uid in range(start_uid, last_uid+1):
+    filters = conf.get('filters')
+    for uid in range(start_uid+1, last_uid+1):
         _, mail_data = mail.fetch(str(uid).encode(), '(RFC822)')
         _email = mail_data[0][1]
         tmp_path = os.path.join(tmp_dir, get_tmp_filename())
@@ -135,6 +142,15 @@ def sync(conf):
         last_email = email.message_from_bytes(_email)
 
         filename = f'{conf["email"]}-{uid}'
+        if filters and match_filter(last_email['subject'], filters):
+            filename += ':2,S'
+            logger.debug(
+                'Marking email as read because of filter: %s', filename
+            )
+            last_email = None
+            os.rename(tmp_path, os.path.join(cur_dir, filename))
+            continue
+
         os.rename(tmp_path, os.path.join(new_dir, filename))
         logger.debug('Synced: %s', filename)
 
@@ -152,7 +168,11 @@ def sync(conf):
     mail.close()
 
 
-lock_file = os.path.join('/tmp', 'eamil2maildir.pid')
+def match_filter(subject, filters):
+    return any([
+        key_phrase.strip() in subject
+        for key_phrase in filters.split('|')
+    ])
 
 
 def pid_exists(pid):
@@ -191,10 +211,10 @@ def release():
 def main():
     lock()
     try:
-        conf = configparser.ConfigParser()
-        conf.read(os.path.join(home_dir, '.e2m-conf'))
         for section in conf.sections():
             sync(conf[section])
+    except Exception:
+        logger.exception('Error happened during sync')
     finally:
         release()
 
