@@ -4,4 +4,4 @@ Email to maildir sync
 Sync your emails to maildir (currently only imap supported)
 """
 
-__version__ = '1.0.0'
+__version__ = '1.0.2'

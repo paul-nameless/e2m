@@ -213,8 +213,6 @@ def release():
 
 
 def main():
-    notify(10, 'from', 'subject')
-    return
     lock()
     try:
         for section in conf.sections():
