@@ -42,7 +42,8 @@ def notify(unseen, _from, subject):
     subtitle = '-subtitle {!r}'.format(_from)
     title = '-title {!r}'.format(f'Synced {unseen} new emails')
     sound = '-sound default'
-    icon = '-appIcon e2m.png'
+    icon_path = os.path.join(os.path.dirname(__file__), 'e2m.png')
+    icon = f'-appIcon {icon_path}'
     cmd = '/usr/local/bin/terminal-notifier'
 
     os.system(
@@ -212,6 +213,8 @@ def release():
 
 
 def main():
+    notify(10, 'from', 'subject')
+    return
     lock()
     try:
         for section in conf.sections():
