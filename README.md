@@ -2,18 +2,25 @@
 
 Sync your emails to maildir (currently only imap supported)
 
-## Getting started
 
-There should be config file in the homedir `.email2maildir` with next format.
+## Install
 
 ```
-$ cat ~/.e2m-conf
+pip install e2m
+```
+
+## Getting started
+
+Config file required in the homedir `.e2mrc` with next format.
+
+```
+$ cat ~/.e2mrc
 [job]
 email = [name]@[domain]
 pswd = [password]
 imap_host = imap.gmail.com
 imap_port = 993
-keep = 100
+keep = 256
 ```
 
 You can specify multiple sections with different accoutns.
@@ -21,5 +28,5 @@ You can specify multiple sections with different accoutns.
 Then add it to your crontab
 
 ```
-*/2 * * * * /usr/local/bin/python3 $HOME/Documents/email2maildir/email2maildir.py 2>&1 >/dev/null
+*/2 * * * * /usr/local/bin/e2m 2>&1 >/dev/null
 ```

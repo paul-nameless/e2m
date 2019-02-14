@@ -1,0 +1,16 @@
+[tool.flit.metadata]
+module = "e2m"
+dist-name = "e2m"
+description-file = "README.md"
+author = "Paul Nameless"
+author-email = "paul.nameless@icloud.com"
+home-page = 'https://github.com/paul-nameless/e2m'
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+]
+requires-python = ">=3.5"
+requires = []
+
+[tool.flit.scripts]
+e2m = "e2m.main:main"

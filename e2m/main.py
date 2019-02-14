@@ -25,7 +25,7 @@ logging.basicConfig(
         ),
         logging.StreamHandler()]
 )
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 tmp_dir = os.path.join(mail_dir, 'tmp')
 new_dir = os.path.join(mail_dir, 'new')
@@ -52,12 +52,12 @@ def notify(unseen, _from, subject):
 
 def truncate(conf):
     files = [e for e in os.listdir(cur_dir) if conf['email'] in e]
-    logger.debug('Before deleting: %s', len(files))
+    log.debug('Before deleting: %s', len(files))
     files.sort(key=lambda fn: int(fn.replace(conf['email'], '').split(':')[0]))
     for fn in reversed(files[int(conf['keep']):]):
-        logger.debug('Deleting: %s', fn)
+        log.debug('Deleting: %s', fn)
         os.remove(os.path.join(cur_dir, fn))
-    logger.debug(
+    log.debug(
         'After deleting: %s',
         len([e for e in os.listdir(cur_dir) if conf['email'] in e])
     )
@@ -70,12 +70,12 @@ def initial_sync(conf):
     rc, data = mail.select('inbox', readonly=True)
 
     if rc != 'OK':
-        logger.error('mail.select returned not ok response')
+        log.error('mail.select returned not ok response')
         return
     last_uid_str = data[0].decode()
 
     if not last_uid_str.isdigit():
-        logger.error('last returned uid not digit: %s', last_uid_str)
+        log.error('last returned uid not digit: %s', last_uid_str)
         return
     last_uid = int(last_uid_str)
     start_uid = last_uid - int(conf['keep'])
@@ -89,11 +89,11 @@ def initial_sync(conf):
 
         filename = f'{conf["email"]}-{uid}:2,S'
         os.rename(tmp_path, os.path.join(cur_dir, filename))
-        logger.debug('Initial sync, marked as read: %s', filename)
+        log.debug('Initial sync, marked as read: %s', filename)
 
     with open(state_file, 'w') as f:
         f.write(str(last_uid))
-        logger.debug('Saved last uid: %s', last_uid)
+        log.debug('Saved last uid: %s', last_uid)
 
     mail.close()
 
@@ -114,18 +114,18 @@ def sync(conf):
     mail.login(conf['email'], conf['pswd'])
     rc, data = mail.select('inbox', readonly=True)
     if rc != 'OK':
-        logger.error('mail.select returned not ok response')
+        log.error('mail.select returned not ok response')
         return
 
     last_uid_str = data[0].decode()
     if not last_uid_str.isdigit():
-        logger.error('last returned uid not digit: %s', last_uid_str)
+        log.error('last returned uid not digit: %s', last_uid_str)
         return
     last_uid = int(last_uid_str)
-    logger.debug('Last uid: %s', last_uid)
+    log.debug('Last uid: %s', last_uid)
 
     if last_uid <= last_saved_uid:
-        logger.info(
+        log.info(
             'No messages to retrieve: last_uid=%s, last_saved_uid=%s',
             last_uid, last_saved_uid
         )
@@ -147,7 +147,7 @@ def sync(conf):
         filename = f'{conf["email"]}-{uid}'
         if filters and match_filter(last_email['subject'], filters):
             filename += ':2,S'
-            logger.debug(
+            log.debug(
                 'Marking email as read because of filter: %s', filename
             )
             last_email = None
@@ -155,7 +155,7 @@ def sync(conf):
             continue
 
         os.rename(tmp_path, os.path.join(new_dir, filename))
-        logger.debug('Synced: %s', filename)
+        log.debug('Synced: %s', filename)
 
     if last_email:
         notify(
@@ -166,7 +166,7 @@ def sync(conf):
 
     with open(state_file, 'w') as f:
         f.write(str(last_uid))
-        logger.debug('Saved last uid: %s', last_uid)
+        log.debug('Saved last uid: %s', last_uid)
     truncate(conf)
     mail.close()
 
@@ -194,10 +194,10 @@ def lock():
         with open(lock_file) as f:
             pid = int(f.read())
             if pid_exists(pid) and pid != os.getpid():
-                logger.info('Another instance running with pid: %s', pid)
+                log.info('Another instance running with pid: %s', pid)
                 raise SystemExit
             else:
-                logger.info('There is zombie file left from pid: %s', pid)
+                log.info('There is zombie file left from pid: %s', pid)
                 os.remove(lock_file)
 
     with open(lock_file, 'w') as f:
@@ -217,7 +217,7 @@ def main():
         for section in conf.sections():
             sync(conf[section])
     except Exception:
-        logger.exception('Error happened during sync')
+        log.exception('Error happened during sync')
     finally:
         release()
 
