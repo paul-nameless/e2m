@@ -147,7 +147,7 @@ def sync(conf):
 
         filename = f'{conf["email"]}-{uid}'
         if filters and match_filter(last_email['subject'], filters):
-            filename += ':2,S'
+            # filename += ':2,S'
             log.debug(
                 'Marking email as read because of filter: %s', filename
             )
